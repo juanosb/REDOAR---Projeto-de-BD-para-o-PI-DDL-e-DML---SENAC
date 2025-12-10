@@ -1,4 +1,8 @@
 # Projeto de Banco de Dados – Redoar
+integrantes:
+Alexciane Lima
+Fabiana Amorim
+Juan Sá Barreto
 
 ## 1. Descrição do Modelo Lógico (redoar_db)
 
