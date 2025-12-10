@@ -145,3 +145,5 @@ A view view_doacoes_ong apoia relatórios gerenciais sobre desempenho e impacto 
 | Agendamento de Coleta    | AGENDAMENTO_COLETA | id_agendamento | FKs para ITEM(id_item), USUARIO(id_receptor) e USUARIO(id_coletor)   |
 | Doação                   | DOACAO           | id_doacao        | FKs para ITEM, USUARIO (doador e receptor), ONG                       |
 | Pontuação / Gamificação  | PONTUACAO        | id_pontuacao     | FKs para USUARIO(id_usuario) e DOACAO(id_doacao)                        |
+
+https://www.figma.com/make/IKqqQwAqQaJwc7pSh4h233/ReDoar?node-id=0-1&p=f
