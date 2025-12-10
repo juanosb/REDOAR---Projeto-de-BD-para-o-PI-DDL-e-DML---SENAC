@@ -1,0 +1,373 @@
+/*****************************************************************************
+ REDOAR - BANCO DE DADOS COMPLETO (VERSÃO CORRIGIDA)
+ Compatível com MySQL Workbench 8.0+
+*****************************************************************************/
+
+DROP DATABASE IF EXISTS redoar_db;
+CREATE DATABASE redoar_db
+  DEFAULT CHARACTER SET utf8mb4
+  DEFAULT COLLATE utf8mb4_unicode_ci;
+
+USE redoar_db;
+
+/*****************************************************************************
+ 1) TABELA DE STATUS DO SISTEMA
+*****************************************************************************/
+
+CREATE TABLE app_status (
+  id_status TINYINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  chave VARCHAR(50) NOT NULL UNIQUE,
+  descricao VARCHAR(100) NOT NULL
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+/*****************************************************************************
+ 2) TABELA DE CATEGORIAS DE ITENS
+*****************************************************************************/
+
+CREATE TABLE item_categoria (
+  id_categoria SMALLINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  nome VARCHAR(50) NOT NULL UNIQUE,
+  descricao VARCHAR(255)
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+/*****************************************************************************
+ 3) PLANOS DE EMPRESAS (B2B)
+*****************************************************************************/
+
+CREATE TABLE plano_empresa (
+  id_plano TINYINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  nome VARCHAR(50) NOT NULL,
+  valor_mensal DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  beneficios TEXT
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+/*****************************************************************************
+ 4) USUÁRIOS
+*****************************************************************************/
+
+CREATE TABLE usuario (
+  id_usuario INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  nome VARCHAR(150) NOT NULL,
+  email VARCHAR(150) NOT NULL UNIQUE,
+  senha_hash VARCHAR(255) NOT NULL,
+  telefone VARCHAR(30),
+  tipo_enum ENUM('DOADOR','RECEBEDOR','EMPRESA','ADMIN') NOT NULL DEFAULT 'DOADOR',
+  pontos INT DEFAULT 0,
+  govbr_verificado BOOLEAN DEFAULT FALSE,
+  cadunico_verificado BOOLEAN DEFAULT FALSE,
+  data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  ultimo_login TIMESTAMP NULL
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+/*****************************************************************************
+ 5) EMPRESA (perfil adicional para usuários tipo empresa)
+*****************************************************************************/
+
+CREATE TABLE empresa (
+  id_empresa INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  usuario_id INT UNSIGNED NOT NULL UNIQUE,
+  nome_fantasia VARCHAR(150) NOT NULL,
+  cnpj VARCHAR(20) UNIQUE,
+  id_plano TINYINT UNSIGNED,
+  data_assinatura_start DATE,
+  data_assinatura_end DATE,
+  destaque BOOLEAN DEFAULT FALSE,
+  FOREIGN KEY (usuario_id) REFERENCES usuario(id_usuario)
+      ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (id_plano) REFERENCES plano_empresa(id_plano)
+      ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+/*****************************************************************************
+ 6) ENDEREÇOS
+*****************************************************************************/
+
+CREATE TABLE endereco (
+  id_endereco INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  usuario_id INT UNSIGNED NOT NULL,
+  cep VARCHAR(12),
+  pais VARCHAR(100) DEFAULT 'Brasil',
+  estado VARCHAR(100),
+  cidade VARCHAR(100),
+  bairro VARCHAR(100),
+  rua VARCHAR(200),
+  numero VARCHAR(20),
+  complemento VARCHAR(200),
+  lat DECIMAL(10,7),
+  lng DECIMAL(10,7),
+  ativo BOOLEAN DEFAULT TRUE,
+  criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (usuario_id) REFERENCES usuario(id_usuario)
+      ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+/*****************************************************************************
+ 7) RECEBEDORES - dados extras
+*****************************************************************************/
+
+CREATE TABLE recebedor (
+  id_recebedor INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  usuario_id INT UNSIGNED NOT NULL UNIQUE,
+  documento_identidade VARCHAR(50),
+  data_verificacao_govbr TIMESTAMP NULL,
+  motivo_social VARCHAR(255),
+  fk_endereco INT UNSIGNED,
+  FOREIGN KEY (usuario_id) REFERENCES usuario(id_usuario)
+      ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (fk_endereco) REFERENCES endereco(id_endereco)
+      ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+/*****************************************************************************
+ 8) ITENS
+*****************************************************************************/
+
+CREATE TABLE item (
+  id_item BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  doador_id INT UNSIGNED NOT NULL,
+  titulo VARCHAR(200) NOT NULL,
+  descricao TEXT,
+  id_categoria SMALLINT UNSIGNED NOT NULL,
+  estado_conservacao ENUM('NOVO','BOM','REGULAR','PRECISA_REPARO') DEFAULT 'BOM',
+  imagem_principal VARCHAR(400),
+  quantidade INT UNSIGNED DEFAULT 1,
+  peso_kg DECIMAL(6,2),
+  altura_cm DECIMAL(6,2),
+  largura_cm DECIMAL(6,2),
+  profundidade_cm DECIMAL(6,2),
+  criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  ativo BOOLEAN DEFAULT TRUE,
+  FOREIGN KEY (doador_id) REFERENCES usuario(id_usuario)
+      ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (id_categoria) REFERENCES item_categoria(id_categoria)
+      ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+/*****************************************************************************
+ 9) DOAÇÃO (instância da transação de entrega)
+*****************************************************************************/
+
+CREATE TABLE doacao (
+  id_doacao BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  item_id BIGINT UNSIGNED NOT NULL,
+  receptor_id INT UNSIGNED NULL,
+  status_id TINYINT UNSIGNED NOT NULL,
+  codigo_validacao VARCHAR(30) NOT NULL UNIQUE,
+  validade_codigo TIMESTAMP NULL,
+  agendada_para DATETIME NULL,
+  data_oferta TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  data_confirmacao_entrega TIMESTAMP NULL,
+  nota_entrega TEXT,
+  local_retirada_endereco_id INT UNSIGNED,
+  FOREIGN KEY (item_id) REFERENCES item(id_item)
+      ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (receptor_id) REFERENCES recebedor(id_recebedor)
+      ON DELETE SET NULL ON UPDATE CASCADE,
+  FOREIGN KEY (status_id) REFERENCES app_status(id_status)
+      ON DELETE RESTRICT ON UPDATE CASCADE,
+  FOREIGN KEY (local_retirada_endereco_id) REFERENCES endereco(id_endereco)
+      ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+/*****************************************************************************
+ 10) LOG DE STATUS
+*****************************************************************************/
+
+CREATE TABLE doacao_status_log (
+  id_log BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  doacao_id BIGINT UNSIGNED NOT NULL,
+  status_id TINYINT UNSIGNED NOT NULL,
+  alterado_por INT UNSIGNED,
+  comentario TEXT,
+  criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (doacao_id) REFERENCES doacao(id_doacao)
+      ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (status_id) REFERENCES app_status(id_status)
+      ON DELETE RESTRICT ON UPDATE CASCADE,
+  FOREIGN KEY (alterado_por) REFERENCES usuario(id_usuario)
+      ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+/*****************************************************************************
+ 11) PONTOS
+*****************************************************************************/
+
+CREATE TABLE pontos_log (
+  id_log BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  usuario_id INT UNSIGNED NOT NULL,
+  origem ENUM('DOACAO','CONFIRMACAO','CAMPANHA','BONUS') NOT NULL,
+  valor INT NOT NULL,
+  descricao VARCHAR(255),
+  criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (usuario_id) REFERENCES usuario(id_usuario)
+      ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+/*****************************************************************************
+ 12) CAMPANHAS
+*****************************************************************************/
+
+CREATE TABLE campanha (
+  id_campanha INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  nome VARCHAR(150) NOT NULL,
+  descricao TEXT,
+  data_inicio DATE,
+  data_fim DATE,
+  ativo BOOLEAN DEFAULT TRUE,
+  criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE campanha_empresa (
+  id INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  id_campanha INT UNSIGNED NOT NULL,
+  id_empresa INT UNSIGNED NOT NULL,
+  destaque BOOLEAN DEFAULT FALSE,
+  criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (id_campanha) REFERENCES campanha(id_campanha)
+      ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (id_empresa) REFERENCES empresa(id_empresa)
+      ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE doacao_campanha (
+  id INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  id_doacao BIGINT UNSIGNED NOT NULL,
+  id_campanha INT UNSIGNED NOT NULL,
+  id_empresa INT UNSIGNED NULL,
+  criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (id_doacao) REFERENCES doacao(id_doacao)
+      ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (id_campanha) REFERENCES campanha(id_campanha)
+      ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (id_empresa) REFERENCES empresa(id_empresa)
+      ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+/*****************************************************************************
+ 13) AUDITORIA
+*****************************************************************************/
+
+CREATE TABLE audit_event (
+  id_evento BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  usuario_id INT UNSIGNED,
+  recurso VARCHAR(100),
+  acao VARCHAR(50),
+  detalhe JSON,
+  criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (usuario_id) REFERENCES usuario(id_usuario)
+      ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+/*****************************************************************************
+ 14) TRIGGER DE PONTUAÇÃO
+*****************************************************************************/
+
+DELIMITER $$
+
+CREATE TRIGGER trg_doacao_confirmada
+AFTER UPDATE ON doacao
+FOR EACH ROW
+BEGIN
+  DECLARE v_old VARCHAR(50);
+  DECLARE v_new VARCHAR(50);
+  DECLARE v_doador INT;
+
+  SELECT chave INTO v_old FROM app_status WHERE id_status = OLD.status_id;
+  SELECT chave INTO v_new FROM app_status WHERE id_status = NEW.status_id;
+
+  IF v_old <> v_new AND v_new = 'CONFIRMADA' THEN
+    SELECT doador_id INTO v_doador FROM item WHERE id_item = NEW.item_id;
+
+    UPDATE usuario SET pontos = pontos + 50 WHERE id_usuario = v_doador;
+
+    INSERT INTO pontos_log (usuario_id, origem, valor, descricao)
+    VALUES (v_doador, 'CONFIRMACAO', 50, CONCAT('Doação ', NEW.id_doacao, ' confirmada'));
+  END IF;
+END$$
+
+DELIMITER ;
+
+/*****************************************************************************
+ 15) VIEWS
+*****************************************************************************/
+
+CREATE VIEW vw_doacoes_resumo AS
+SELECT s.chave AS status, s.descricao AS status_desc, COUNT(d.id_doacao) AS total,
+       SUM(i.quantidade) AS itens_total
+FROM doacao d
+JOIN app_status s ON d.status_id = s.id_status
+LEFT JOIN item i ON d.item_id = i.id_item
+GROUP BY s.chave, s.descricao;
+
+CREATE VIEW vw_esg_empresa AS
+SELECT e.id_empresa, e.nome_fantasia,
+       COUNT(DISTINCT dc.id_doacao) AS doacoes_vinculadas,
+       SUM(i.quantidade) AS itens_total
+FROM empresa e
+LEFT JOIN campanha_empresa ce ON ce.id_empresa = e.id_empresa
+LEFT JOIN campanha c ON c.id_campanha = ce.id_campanha
+LEFT JOIN doacao_campanha dc ON dc.id_campanha = c.id_campanha
+LEFT JOIN doacao d ON d.id_doacao = dc.id_doacao
+LEFT JOIN item i ON i.id_item = d.item_id
+GROUP BY e.id_empresa, e.nome_fantasia;
+
+CREATE VIEW vw_top_doadores AS
+SELECT u.id_usuario, u.nome, u.email, u.pontos,
+       COUNT(d.id_doacao) AS doacoes_count
+FROM usuario u
+LEFT JOIN item it ON it.doador_id = u.id_usuario
+LEFT JOIN doacao d ON d.item_id = it.id_item
+GROUP BY u.id_usuario, u.nome, u.email, u.pontos
+ORDER BY u.pontos DESC, doacoes_count DESC
+LIMIT 10;
+
+/*****************************************************************************
+ 16) SEEDS
+*****************************************************************************/
+
+INSERT INTO app_status (chave, descricao) VALUES
+  ('OFERECIDA','Oferta criada e disponível'),
+  ('ACEITA','Recebedor aceitou'),
+  ('AGENDADA','Entrega agendada'),
+  ('ENTREGUE','Item entregue'),
+  ('CONFIRMADA','Entrega confirmada');
+
+INSERT INTO item_categoria (nome, descricao) VALUES
+  ('Roupas','Vestuário em geral'),
+  ('Moveis','Móveis de grande porte'),
+  ('Eletroeletronicos','Aparelhos eletroeletrônicos');
+
+INSERT INTO plano_empresa (nome, valor_mensal, beneficios) VALUES
+  ('Bronze',29.90,'Relatório básico'),
+  ('Prata',59.90,'Destaque intermediário'),
+  ('Ouro',199.90,'Relatórios ESG premium');
